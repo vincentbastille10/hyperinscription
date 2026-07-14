@@ -93,6 +93,8 @@ export default function Home() {
   const [selectedActivities, setSelectedActivities] = useState<string[]>(["Danse", "Théâtre"]);
   const [runState, setRunState] = useState<"ready" | "running" | "stopped">("ready");
   const [runProgress, setRunProgress] = useState(0);
+  const [testEmail, setTestEmail] = useState("");
+  const [testEmailSending, setTestEmailSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tous");
   const [prospects, setProspects] = useState(initialProspects);
@@ -171,6 +173,40 @@ export default function Home() {
   function stopRun() {
     setRunState("stopped");
     setNotice("Run arrêté. Les résultats déjà trouvés sont conservés.");
+  }
+
+  function openHyperInscription() {
+    document.getElementById("hyperinscription-run")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function sendTestEmail() {
+    const recipient = testEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      setNotice("Entre une adresse email valide pour recevoir le test.");
+      return;
+    }
+
+    setTestEmailSending(true);
+    setNotice(`Préparation du test pour ${recipient}…`);
+    try {
+      const response = await fetch("/api/test-email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: recipient, locale: emailLanguage }),
+      });
+      const data = await response.json() as { delivered?: boolean; error?: string };
+      if (response.ok && data.delivered) {
+        setNotice(`Email test envoyé à ${recipient}.`);
+      } else if (data.error === "mailjet_not_configured") {
+        setNotice("L’adresse est prête. Ajoute les identifiants Mailjet pour activer l’envoi réel.");
+      } else {
+        setNotice("L’email test n’a pas pu être envoyé. Vérifie la configuration Mailjet.");
+      }
+    } catch {
+      setNotice("L’email test n’a pas pu être envoyé pour le moment.");
+    } finally {
+      setTestEmailSending(false);
+    }
   }
 
   return (
@@ -280,7 +316,21 @@ export default function Home() {
       {screen === "hyperscript" && (
         <section className="workspace-page section-pad">
           <div className="workspace-heading"><div><p className="eyebrow">Raccord HyperScript</p><h1>Choisis les cases. Lance le run.</h1><p>HyperScript garde son rôle de scrape, crawl et envoi. HyperInscription lui fournit la démo et remonte les signaux.</p></div><div className="connection-card"><span className="live-dot"/><div><small>Connexion</small><b>Bridge prêt</b></div></div></div>
-          <form className="run-layout" onSubmit={startRun}>
+          <section className="deck-launcher" aria-labelledby="deck-title">
+            <button type="button" className="deck-app" onClick={openHyperInscription} aria-label="Lancer HyperInscription">
+              <span className="deck-app-icon"><i>H</i><b>+</b><em /><small /></span>
+              <span className="deck-app-copy"><small>APPLICATION</small><strong id="deck-title">HyperInscription</strong><span>Démo, formulaire et suivi</span></span>
+              <span className="deck-open"><Icon name="arrow" /></span>
+            </button>
+            <div className="deck-test">
+              <label htmlFor="test-email"><Icon name="mail" /><span><b>Email de test</b><small>Tape n’importe quelle adresse que tu contrôles.</small></span></label>
+              <div className="deck-test-action">
+                <input id="test-email" type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} placeholder="monadresse@email.com" autoComplete="email" />
+                <button type="button" onClick={sendTestEmail} disabled={testEmailSending}>{testEmailSending ? "Envoi…" : "Envoyer le test"}<Icon name="arrow" /></button>
+              </div>
+            </div>
+          </section>
+          <form className="run-layout" id="hyperinscription-run" onSubmit={startRun}>
             <div className="run-builder">
               <div className="run-title"><span>1</span><div><h2>Activités ciblées</h2><p>Clique directement sur les cases à prospecter.</p></div></div>
               <div className="activity-picker">
@@ -300,7 +350,7 @@ export default function Home() {
             </div>
             <aside className="run-console">
               <div className="console-head"><div><span className={runState === "running" ? "live-dot pulse" : "live-dot"}/><b>{runState === "running" ? "RUN EN COURS" : runState === "stopped" ? "RUN ARRÊTÉ" : "PRÊT À LANCER"}</b></div><small>HyperScript → HyperInscription</small></div>
-              <div className="run-recap"><small>Ciblage</small><b>{selectedActivities.length || 0} activité{selectedActivities.length > 1 ? "s" : ""} · {cityQuery || "aucune ville"}</b><div><span>Exploration</span><strong>20 %</strong></div><div><span>Priorité Mailjet</span><strong>80 %</strong></div></div>
+              <div className="run-recap"><small>Ciblage</small><b>{selectedActivities.length || 0} activité{selectedActivities.length > 1 ? "s" : ""} · {cityQuery || "aucune ville"}</b><div><span>Email de test</span><strong>{testEmail.trim() || "désactivé"}</strong></div><div><span>Exploration</span><strong>20 %</strong></div><div><span>Priorité Mailjet</span><strong>80 %</strong></div></div>
               <div className="progress-track"><span style={{ width: `${runProgress}%` }} /></div>
               <ol className="console-log">
                 <li className={runProgress >= 12 ? "done" : ""}><i /> Recherche des sites ciblés</li>
